@@ -1,6 +1,6 @@
 {
-	"installed": true,
-	"configured": true,
+	"installed": false,
+	"configured": false,
 	"port": 3000,
 	"url": null,
 	"secret": "mySecret",
