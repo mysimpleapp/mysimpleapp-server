@@ -1,0 +1,9 @@
+{
+	"installed": true,
+	"configured": true,
+	"port": 3000,
+	"url": null,
+	"secret": "mySecret",
+	"db_type": "tingodb",
+	"mainApp": "msa-main/server/index.js"
+}

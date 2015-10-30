@@ -1,0 +1,19 @@
+{
+  "name": "msysimpleapp-server",
+  "version": "0.1.0",
+  "homepage": "https://github.com/mysimpleapp/mysimpleapp-server",
+  "authors": [
+    "Nicolas CARREZ <nicolas.carrez@gmail.com>"
+  ],
+  "description": "Server framework dedicated to be easily used and coded.",
+  "main": "server/server.js",
+  "license": "MIT",
+  "dependencies": {
+    "mysimpleapp": "*",
+    "msa-main": "*",
+    "msa-db": "*",
+    "msa-user": "*",
+    "msa-navmenu": "*",
+    "msa-editor": "*"
+  }
+}
