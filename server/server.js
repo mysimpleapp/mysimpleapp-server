@@ -6,7 +6,7 @@ var createServer = function() {
 	try {
 		express = require('express');
 	} catch(err) {
-		return globalNpm(createServer);
+		return globalNpm(__dirname, createServer);
 	}
 	global.App = express();
 	App.express = express;
@@ -158,7 +158,7 @@ var globalNpmPossiblePaths = [
 	path.resolve(path.dirname(process.execPath),'node_modules','npm'),
 	path.resolve(path.dirname(process.execPath),'..','lib','node_modules','npm')
 ]
-var globalNpm = function(next) {
+var globalNpm = function(dir, next) {
 	// try to require npm global module
 	var npm = null;
 	for(var i=0, len=globalNpmPossiblePaths.length; i<len && !npm; ++i) {
@@ -167,11 +167,9 @@ var globalNpm = function(next) {
 		} catch(err) {}
 	}
 	// if not found, raise an error
-	if(!npm) {
-		console.log('ERROR: Could not find npm.\nPlease, manually run this command "npm install", in this directory "'+__dirname+'"')
-		return
-	}
+	if(!npm) return console.log('ERROR: Could not find npm.\nPlease, manually run this command "npm install", in this directory "'+dir+'"')
 	// if found, npm install the server
+	process.chdir(dir);
 	npm.load(function (err) {
 		if (err) return console.log(err);
 		npm.commands.install(function (err, data) {
