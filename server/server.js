@@ -154,8 +154,24 @@ var getCallerFileName = function() {
 
 // installation ///////////////////////////////////////////////////////////////
 
+var globalNpmPossiblePaths = [
+	path.resolve(path.dirname(process.execPath),'node_modules','npm'),
+	path.resolve(path.dirname(process.execPath),'..','lib','node_modules','npm')
+]
 var globalNpm = function(next) {
-	var npm = require(path.resolve(path.dirname(process.execPath),'node_modules','npm'));
+	// try to require npm global module
+	var npm = null;
+	for(var i=0, len=globalNpmPossiblePaths.length; i<len && !npm; ++i) {
+		try {
+			npm = require(globalNpmPossiblePaths[i])
+		} catch(err) {}
+	}
+	// if not found, raise an error
+	if(!npm) {
+		console.log('ERROR: Could not find npm.\nPlease, manually run this command "npm install", in this directory "'+__dirname+'"')
+		return
+	}
+	// if found, npm install the server
 	npm.load(function (err) {
 		if (err) return console.log(err);
 		npm.commands.install(function (err, data) {
