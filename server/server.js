@@ -26,7 +26,7 @@ var createServer = function() {
 	callsite = require('callsite');
 	
 	// load sever config
-	App.config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'));
 	
 	App.init();
 };
