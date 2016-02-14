@@ -10,7 +10,7 @@ npm install -g bower
 * Clone the mysimpleapp server scripts into your working directory
 ```
 cd <your working directory>
-git clone git@github.com:mysimpleapp/mysimpleapp-server.git
+git clone https://github.com/mysimpleapp/mysimpleapp-server.git
 ```
 
 ## How to run
