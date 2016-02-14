@@ -9,7 +9,6 @@
   "main": "server/server.js",
   "license": "MIT",
   "dependencies": {
-    "mysimpleapp": "*",
     "msa-main": "*"
   }
 }
