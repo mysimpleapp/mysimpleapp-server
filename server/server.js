@@ -210,17 +210,21 @@ var installComponent = function(req, res, next) {
 };
 var installSubApp = function(msaConfigFiles, index, next) {
 	if(index>=msaConfigFiles.length) return next();
-	// parse msa-config file
 	var file = msaConfigFiles[index], dir = path.normalize(__dirname+'/'+path.dirname(file));
-	// npm install the subApp module dependencies
-	var pwd = sh.pwd();
-	sh.cd(dir);
-	var cmd = "npm install"
-	sh.exec(cmd, function(code){
-		if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
-		sh.cd(pwd);
-		installSubApp(msaConfigFiles, index+1, next);
-	});
+	// check if package.json exists
+	fs.access(dir+'/package.json', fs.F_OK, function(err) {
+		// if not exists: pass
+		if(err) return installSubApp(msaConfigFiles, index+1, next)
+		// if exists: npm install the subApp module dependencies
+		var pwd = sh.pwd();
+		sh.cd(dir);
+		var cmd = "npm install"
+		sh.exec(cmd, function(code){
+			if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
+			sh.cd(pwd)
+			installSubApp(msaConfigFiles, index+1, next)
+		})
+	})
 };
 
 setRoutesForConfiguration = function(next) {
