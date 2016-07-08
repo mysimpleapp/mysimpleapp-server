@@ -1,43 +1,45 @@
-var express, fs, sh, glob, callsite;
-var path = require('path');
+var express, fs, sh, glob, callsite
+var path = require('path')
 
 var createServer = function() {
 	// create express App
 	try {
-		express = require('express');
+		express = require('express')
 	} catch(err) {
-		return globalNpm(__dirname, createServer);
+		return globalNpm(__dirname, createServer)
 	}
-	global.App = express();
-	App.express = express;
-	App.dirname = path.normalize(__dirname+"/..");
-	App.installComponent = installComponent;
-	App.subApp = createSubApp;
-	App.getSubAppFromRouteName = getSubAppFromRouteName;
-	App.components = {};
-	App.routes = {};
-	App.init = init;
-	App.setRoutes = setRoutes;
+	global.App = express()
+	App.express = express
+	App.dirname = path.normalize(__dirname+"/..")
+	App.installComponent = installComponent
+	App.subApp = createSubApp
+	App.getSubAppFromRouteName = getSubAppFromRouteName
+	App.components = {}
+	App.routes = {}
+	App.init = init
+	App.setRoutes = setRoutes
+	App.solveHtmlExpr = solveHtmlExpr
+	//App.normalizeToUrl = normalizeToUrl
 	
 	// require
-	fs = require('fs');
-	sh = require('shelljs');
-	glob = require('glob');
-	callsite = require('callsite');
+	fs = require('fs')
+	sh = require('shelljs')
+	glob = require('glob')
+	callsite = require('callsite')
 	
 	// load sever config
-	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'));
+	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
 	
-	App.init();
-};
+	App.init()
+}
 
 var init = function(next) {
 	if(!this.config.installed) installServer();
 	else {
-		if(!this.config.configured) setRoutesForConfiguration(startServer);
-		else setRoutes(startServer);
+		if(!this.config.configured) setRoutesForConfiguration(startServer)
+		else setRoutes(startServer)
 	}
-};
+}
 
 var setRoutes = function(next) {
 	resetMountedApp()
@@ -45,11 +47,11 @@ var setRoutes = function(next) {
 	// parse subApp msa-routes.json files
 	glob(App.dirname+"/bower_components/**/msa-config.json", null, function(err, msaConfigFiles) {
 		for(var f=0, len=msaConfigFiles.length; f<len; ++f) {
-			var msaConfigFile = msaConfigFiles[f];
-			var config = JSON.parse(fs.readFileSync(msaConfigFile));
-			var routes = config.routes;
-			if(!routes) continue;
-			var dirname = path.dirname(msaConfigFile);
+			var msaConfigFile = msaConfigFiles[f]
+			var config = JSON.parse(fs.readFileSync(msaConfigFile))
+			var routes = config.routes
+			if(!routes) continue
+			var dirname = path.dirname(msaConfigFile)
 			// fill App.routes
 			for(var routeName in routes) {
 				if(App.routes[routeName]!==undefined) { console.log('WARNING: route name "'+routeName+'" is already used.');  continue; }
@@ -58,38 +60,45 @@ var setRoutes = function(next) {
 			}
 		}
 		
+		// build router
+		App.subAppsRouter = express.Router()
+		for(var routeName in App.routes) {
+			var subApp = App.getSubAppFromRouteName(routeName)
+			if(subApp) App.subAppsRouter.use("/"+routeName, subApp)
+		}
+		
 		// use main App
-		var mainApp = require(App.dirname+'/bower_components/'+App.config.mainApp);
+		var mainApp = require(App.dirname+'/bower_components/'+App.config.mainApp)
 		App.use(mainApp)
 		
-		next && next();
+		next && next()
 	});
 }
 
 var resetMountedApp = function() {
-	if(!App._router || !App._router.stack) return;
-	var stack = App._router.stack;
+	if(!App._router || !App._router.stack) return
+	var stack = App._router.stack
 	for(var r=0; r<stack.length; ++r)
 		if(stack[r].name=='mounted_app')
 			stack.splice(r--,1)
 }
 
 var startServer = function(next) {
-	App.listen(App.config.port, App.config.url);
-	console.log("Server ready: http://localhost:"+App.config.port+"/");
-	next && next();
+	App.listen(App.config.port, App.config.url)
+	console.log("Server ready: http://localhost:"+App.config.port+"/")
+	next && next()
 };
 var getSubAppFromRouteName = function(routeName) {
 	var route = App.routes[routeName]
-	var subApp = route.subApp;
+	var subApp = route.subApp
 	if(subApp==undefined) {
 		subApp = null
-		var subAppFile = route.file;
-		var ext = path.extname(subAppFile);
-		if(ext==".js") subApp = require(subAppFile);
+		var subAppFile = route.file
+		var ext = path.extname(subAppFile)
+		if(ext==".js") subApp = require(subAppFile)
 		else if(ext==".html") {
-			subApp = App.subApp(subAppFile);
-			subApp.partial('/', file);
+			subApp = App.subApp(subAppFile)
+			subApp.getAsPartial('/', path.basename(subAppFile))
 		} else {
 			console.log("ERROR: Bad extension for routing file (only allowed .js and .html).")
 		}
@@ -99,58 +108,76 @@ var getSubAppFromRouteName = function(routeName) {
 };
 
 // App.require
-var createSubApp = function(callerFileName) {
-	if(!callerFileName) callerFileName = getCallerFileName();
-	callerFileName = path.normalize(callerFileName);
-	var subApp = express();
-	subApp.dirname = path.dirname(callerFileName);
-	subApp.dirurl = normalizeToUrl(path.relative(App.dirname, subApp.dirname));
-	subApp.buildPartial = buildPartial;
-	subApp.getAsPartial = getAsPartial;
-	return subApp;
-};
+var createSubApp = function(callerDepth) {
+	if(!callerDepth) callerDepth = 0
+	var callerFileName = getCallerFileName(callerDepth+1)
+	callerFileName = path.normalize(callerFileName)
+	var subApp = express()
+	subApp.dirname = path.dirname(callerFileName)
+	subApp.dirurl = normalizeToUrl(path.relative(App.dirname, subApp.dirname))
+	subApp.buildPartial = buildPartial
+	subApp.getAsPartial = getAsPartial
+	return subApp
+}
 
 // partials
 var buildPartial = function(file, args) {
-	var fileurl = normalizeToUrl(this.dirurl+'/'+file);
-	var webcomponent = path.basename(file, '.html');
-	var head = '<link rel="import" href="'+fileurl+'"></link>';
-	var body = '<'+webcomponent;
+	var fileurl = normalizeToUrl(this.dirurl+'/'+file)
+	var webcomponent = path.basename(file, '.html')
+	var head = '<link rel="import" href="'+fileurl+'"></link>'
+	var body = '<'+webcomponent
 	if(args) {
 		for(var a in args) {
-			if(a==="content") continue;
-			var val = args[a];
-			if(val===null) continue;
-			body += " "+a+"='"+val+"'";
+			if(a==="content") continue
+			var val = args[a]
+			if(val===null) continue
+			body += " "+a+"='"+val+"'"
 		}
 	}
 	body += '>'
 	if(args && args.content) {
-		body += args.content;
+		body += args.content
 	}
-	body += '</'+webcomponent+'>';
-	return { head: head, body: body };
-};
+	body += '</'+webcomponent+'>'
+	return { head: head, body: body }
+}
 var getAsPartial = function(route, file, args) {
-	var partial = this.buildPartial(file, args);
+	var partial = this.buildPartial(file, args)
 	return this.get(route, function(req, res, next) {
-		res.partial = partial;
-		next();
-	});
-};
+		res.partial = partial
+		next()
+	})
+}
 
 /*var getUrl = function(file, callerFileName) {
 	if(!callerFileName) callerFileName = getCallerFileName();
 	return '/'+path.normalize(path.relative(App.dirname, path.dirname(callerFileName)+'/'+file));
 };*/
 var normalizeToUrl = function(file) {
-	var url = path.normalize(file).replace(/\\/g, '/');
-	if(url[0]!='/') url = '/'+url;
-	return (url);
-};
-var getCallerFileName = function() {
-	return callsite()[2].getFileName();
-};
+	var url = path.normalize(file).replace(/\\/g, '/')
+	if(url[0]!='/') url = '/'+url
+	return url
+}
+var getCallerFileName = function(callerDepth) {
+	if(callerDepth===undefined) callerDepth = 0
+	return callsite()[callerDepth+1].getFileName()
+}
+var solveHtmlExpr = function(htmlExpr) {
+	var type = typeof htmlExpr
+	// case string
+	if(type==="string") return { body:htmlExpr }
+	if(type==="object") {
+		// case webcomponent
+		var webcomponent = htmlExpr.webcomponent
+		if(webcomponent!==undefined) {
+			var tagname = path.basename(webcomponent, '.html')
+			var webcomponentUrl = normalizeToUrl(path.relative(App.dirname, webcomponent))
+			return { head:'<link rel="import" href="'+webcomponentUrl+'"></link>', body:"<"+tagname+"></"+tagname+">"}
+		}
+		// other cases
+		return htmlExpr
+	}
+}
 
 // installation ///////////////////////////////////////////////////////////////
 
