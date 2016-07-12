@@ -20,10 +20,11 @@ if ERRORLEVEL 1 (
 
 :startServer
 	echo Start MySimpleApp server...
-	node %~dp0\server\server.js
+	node %~dp0\server\server.js start
 	goto:eof
 
 :installServer
 	echo Install MySimpleApp server...
 	pushd %~dp0\server & call npm install & popd
+	node %~dp0\server\server.js install
 	goto:eof

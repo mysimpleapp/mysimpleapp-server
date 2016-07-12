@@ -6,32 +6,38 @@ var sh = require('shelljs')
 var glob = require('glob')
 var callsite = require('callsite')
 
-var createServer = function() {
-	global.App = express()
-	App.express = express
-	App.dirname = path.normalize(__dirname+"/..")
-	App.installComponent = installComponent
-	App.subApp = createSubApp
-	App.getSubAppFromRouteName = getSubAppFromRouteName
-	App.components = {}
-	App.routes = {}
-	App.init = init
-	App.setRoutes = setRoutes
-	App.solveHtmlExpr = solveHtmlExpr
-	//App.normalizeToUrl = normalizeToUrl
-	
-	// load sever config
-	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
-	
-	App.init()
+var main = function() {
+	// check input arguments
+	var actions = process.argv.slice(2)
+	// "start" is the default argument
+	if(actions.length===0) actions.push("start")
+	// execute actions given in args
+	executeActions(actions, 0, actions.length)
+}
+var executeActions = function(actions, i, len, next) {
+	if(i>=len) return next && next()
+	var executeNextAction = function() { executeActions(actions, i+1, len, next) }
+	var action = actions[i]
+	if(action==="help") help(executeNextAction)
+	else if(action==="start") start(executeNextAction)
+	else if(action==="install") install(executeNextAction)
+	else executeNextAction()
 }
 
-var init = function(next) {
-	if(!this.config.installed) installServer();
-	else {
-		if(!this.config.configured) setRoutesForConfiguration(startServer)
-		else setRoutes(startServer)
-	}
+var help = function(next) {
+	console.log("node server.js [help] [install] [start (default)]")
+	console.log("  help: display this help.")
+	console.log("  install: install first msa components.")
+	console.log("  start: start server.")
+	next()
+}
+
+var start = function(next) {
+	
+	createApp()
+	
+	if(!App.config.configured) setRoutesForConfiguration(startServer)
+	else setRoutes(startServer)
 }
 
 var setRoutes = function(next) {
@@ -174,15 +180,18 @@ var solveHtmlExpr = function(htmlExpr) {
 
 // installation ///////////////////////////////////////////////////////////////
 
-var installServer = function() {
+var install = function(next) {
+
+	createApp()
+
 	App.installComponent({component:null}, null, function(){
-		App.config.installed = true;
+		App.config.installed = true
 		fs.writeFile('config.json', JSON.stringify(App.config, null, "\t"), function (err) {
-			if(err) return console.log(err);
-			App.init();
-		});
-	});
-};
+			if(err) return console.log(err)
+			next && next()
+		})
+	})
+}
 
 // installComponent
 var installComponent = function(req, res, next) {
@@ -223,6 +232,7 @@ var installSubApp = function(msaConfigFiles, index, next) {
 };
 
 setRoutesForConfiguration = function(next) {
+
 	resetMountedApp()
 	
 	// use main App
@@ -232,9 +242,33 @@ setRoutesForConfiguration = function(next) {
 	next && next();
 }
 
-filExists = function(file, next) {
+// COMMON ////////////////////////////////////////
+
+var createApp = function() {
+	if(global.App) return
+
+	// create App
+	global.App = express()
+
+	// Add App attributes & methods
+	App.express = express
+	App.dirname = path.normalize(__dirname+"/..")
+	App.installComponent = installComponent
+	App.subApp = createSubApp
+	App.getSubAppFromRouteName = getSubAppFromRouteName
+	App.components = {}
+	App.routes = {}
+	App.setRoutes = setRoutes
+	App.solveHtmlExpr = solveHtmlExpr
+
+	// load sever config
+	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
+}
+
+var filExists = function(file, next) {
 	if(fs.access) fs.access(file, fs.F_OK, function(err) { next(!err) })
 	else fs.exists(file, next) // to be compatible with old versions of nodejs
 }
 
-createServer();
+// execute main function
+main()

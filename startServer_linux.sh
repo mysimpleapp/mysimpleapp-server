@@ -3,12 +3,13 @@ cd "$(dirname $0)/server"
 
 startServer() {
 	echo "Start MySimpleApp server..."
-	node server.js
+	node server.js start
 }
 
 installServer() {
 	echo "Install MySimpleApp server..."
 	npm install
+	node server.js install
 }
 
 exitInError() {
