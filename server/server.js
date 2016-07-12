@@ -36,8 +36,7 @@ var start = function(next) {
 	
 	createApp()
 	
-	if(!App.config.configured) setRoutesForConfiguration(startServer)
-	else setRoutes(startServer)
+	setRoutes(startServer)
 }
 
 var setRoutes = function(next) {
@@ -184,13 +183,7 @@ var install = function(next) {
 
 	createApp()
 
-	App.installComponent({component:null}, null, function(){
-		App.config.installed = true
-		fs.writeFile('config.json', JSON.stringify(App.config, null, "\t"), function (err) {
-			if(err) return console.log(err)
-			next && next()
-		})
-	})
+	App.installComponent({component:null}, null, next)
 }
 
 // installComponent
@@ -230,17 +223,6 @@ var installSubApp = function(msaConfigFiles, index, next) {
 		})
 	})
 };
-
-setRoutesForConfiguration = function(next) {
-
-	resetMountedApp()
-	
-	// use main App
-	var configureApp = require("./configure.js");
-	App.use(configureApp)
-	
-	next && next();
-}
 
 // COMMON ////////////////////////////////////////
 
