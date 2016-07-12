@@ -1,5 +1,30 @@
 #!/bin/sh
-HERE=$(cd $(dirname $0); pwd)
+cd "$(dirname $0)/server"
 
-node $HERE/server/server.js
-[ "$?" -ne 0 ] && read -p "Press any key to continue..."
+startServer() {
+	echo "Start MySimpleApp server..."
+	node server.js
+}
+
+installServer() {
+	echo "Install MySimpleApp server..."
+	npm install
+}
+
+exitInError() {
+	echo "Press any key to continue..."
+	read _
+	exit 1
+}
+
+# Start server
+startServer
+if [ "$?" -ne 0 ]; then
+	# If server failed to start, try an installation
+	echo "MySimpleApp failed ! Perhaps it is not installed."
+	installServer
+	[ "$?" -ne 0 ] && echo "Installation of MySimpleApp server failed !" && exitInError
+	# Then restart server
+	startServer
+	[ "$?" -ne 0 ] && echo "MySimpleApp server failed to start !" && exitInError
+fi

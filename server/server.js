@@ -1,13 +1,12 @@
-var express, fs, sh, glob, callsite
+// require
 var path = require('path')
+var express = require('express')
+var fs = require('fs')
+var sh = require('shelljs')
+var glob = require('glob')
+var callsite = require('callsite')
 
 var createServer = function() {
-	// create express App
-	try {
-		express = require('express')
-	} catch(err) {
-		return globalNpm(__dirname, createServer)
-	}
 	global.App = express()
 	App.express = express
 	App.dirname = path.normalize(__dirname+"/..")
@@ -20,12 +19,6 @@ var createServer = function() {
 	App.setRoutes = setRoutes
 	App.solveHtmlExpr = solveHtmlExpr
 	//App.normalizeToUrl = normalizeToUrl
-	
-	// require
-	fs = require('fs')
-	sh = require('shelljs')
-	glob = require('glob')
-	callsite = require('callsite')
 	
 	// load sever config
 	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
@@ -180,31 +173,6 @@ var solveHtmlExpr = function(htmlExpr) {
 }
 
 // installation ///////////////////////////////////////////////////////////////
-
-var globalNpmPossiblePaths = [
-	path.resolve(path.dirname(process.execPath),'node_modules','npm'),
-	path.resolve(path.dirname(process.execPath),'..','lib','node_modules','npm')
-]
-var globalNpm = function(dir, next) {
-	// try to require npm global module
-	var npm = null;
-	for(var i=0, len=globalNpmPossiblePaths.length; i<len && !npm; ++i) {
-		try {
-			npm = require(globalNpmPossiblePaths[i])
-		} catch(err) {}
-	}
-	// if not found, raise an error
-	if(!npm) return console.log('ERROR: Could not find npm.\nPlease, manually run this command "npm install", in this directory "'+dir+'"')
-	// if found, npm install the server
-	process.chdir(dir);
-	npm.load(function (err) {
-		if (err) return console.log(err);
-		npm.commands.install(function (err, data) {
-			if (err) return console.log(err);
-			next && next();
-		});
-	});
-};
 
 var installServer = function() {
 	App.installComponent({component:null}, null, function(){
