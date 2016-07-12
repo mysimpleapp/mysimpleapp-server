@@ -222,13 +222,13 @@ var installComponent = function(req, res, next) {
 	if (!sh.which('npm')) return next("ERROR: npm is not installed.");
 	if (!sh.which('bower')) return next("ERROR: bower is not installed.");
 	var component = req.component;
-	var pwd = sh.pwd(), dir = path.normalize(__dirname+'/..');
+	var pwd = sh.pwd(), dir = App.dirname;
 	sh.cd(dir);
 	var cmd = 'bower install '+(component ? component : "");
 	sh.exec(cmd, function(code){
 		if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
 		sh.cd(pwd);
-		var path = '../bower_components/' + (component ? component : '*') + '/**/msa-config.json';
+		var path = App.dirname+'/bower_components/' + (component ? component : '*') + '/**/msa-config.json';
 		glob(path, null, function(err, msaConfigFiles) {
 			if(err) return console.log("ERROR: "+err);
 			installSubApp(msaConfigFiles, 0, next);
@@ -237,11 +237,11 @@ var installComponent = function(req, res, next) {
 };
 var installSubApp = function(msaConfigFiles, index, next) {
 	if(index>=msaConfigFiles.length) return next();
-	var file = msaConfigFiles[index], dir = path.normalize(__dirname+'/'+path.dirname(file));
+	var file = msaConfigFiles[index], dir = path.dirname(file);
 	// check if package.json exists
-	fs.access(dir+'/package.json', fs.F_OK, function(err) {
+	filExists(dir+'/package.json', function(exists) {
 		// if not exists: pass
-		if(err) return installSubApp(msaConfigFiles, index+1, next)
+		if(!exists) return installSubApp(msaConfigFiles, index+1, next)
 		// if exists: npm install the subApp module dependencies
 		var pwd = sh.pwd();
 		sh.cd(dir);
@@ -262,6 +262,11 @@ setRoutesForConfiguration = function(next) {
 	App.use(configureApp)
 	
 	next && next();
+}
+
+filExists = function(file, next) {
+	if(fs.access) fs.access(file, fs.F_OK, function(err) { next(!err) })
+	else fs.exists(file, next) // to be compatible with old versions of nodejs
 }
 
 createServer();

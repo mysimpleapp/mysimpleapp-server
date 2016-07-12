@@ -35,8 +35,7 @@
 	</center>
 	<script>
 		var configure = function(form) {
-			App.post('configure', {name:form.name, pass:form.pass, email:form.email}, function(data){
-				App.update(App.user, data);
+			App.post('configure', {name:form.name, pass:form.pass, email:form.email}, function(){
 				location.reload();
 			});
 		};
