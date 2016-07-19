@@ -36,33 +36,41 @@ var start = function(next) {
 	
 	createApp()
 	
-	setRoutes(startServer)
+	applyConfigs(startServer)
 }
 
-var setRoutes = function(next) {
-	resetMountedApp()
+var applyConfigs = function(next) {
 	
-	// parse subApp msa-routes.json files
-	glob(App.dirname+"/bower_components/**/msa-config.json", null, function(err, msaConfigFiles) {
-		for(var f=0, len=msaConfigFiles.length; f<len; ++f) {
-			var msaConfigFile = msaConfigFiles[f]
-			var config = JSON.parse(fs.readFileSync(msaConfigFile))
-			var routes = config.routes
-			if(!routes) continue
-			var dirname = path.dirname(msaConfigFile)
-			// fill App.routes
-			for(var routeName in routes) {
-				if(App.routes[routeName]!==undefined) { console.log('WARNING: route name "'+routeName+'" is already used.');  continue; }
-				var route = { name:routeName, file:dirname+'/'+routes[routeName], subApp:null }
-				App.routes[routeName] = route
+	// find all msa-config.json files
+	glob(App.dirname+"/bower_components/*/msa-server/msa-config.json", null, function(err, msaConfigFiles) {
+		for(var f=0, lenF=msaConfigFiles.length; f<lenF; ++f) {
+			var file = msaConfigFiles[f], dir = path.dirname(file)
+			// parse file
+			var config = JSON.parse(fs.readFileSync(file))
+			// loop on config elems
+			var configElems = (config.length===undefined) ? [config] : config
+			for(var e=0, lenE=configElems.length; e<lenE; ++e) {
+				var configElem = configElems[e]
+				// subApp
+				var subApp = null
+				if(configElem.subApp) subApp = require(path.normalize(dir+'/'+configElem.subApp))
+				else {
+					// subApp from html expr
+					var html = solveHtmlExpr(configElem, dir)
+					if(html) {
+						var subApp = createSubApp()
+						subApp.get('/', function(req, res, next) {
+							res.partial = html
+							next()
+						})
+					}
+
+				}
+				// route
+				if(subApp && configElem.route) {
+					App.registerRoute(configElem.route, subApp)
+				}
 			}
-		}
-		
-		// build router
-		App.subAppsRouter = express.Router()
-		for(var routeName in App.routes) {
-			var subApp = App.getSubAppFromRouteName(routeName)
-			if(subApp) App.subAppsRouter.use("/"+routeName, subApp)
 		}
 		
 		// use main App
@@ -73,20 +81,20 @@ var setRoutes = function(next) {
 	});
 }
 
-var resetMountedApp = function() {
+/*var resetMountedApp = function() {
 	if(!App._router || !App._router.stack) return
 	var stack = App._router.stack
 	for(var r=0; r<stack.length; ++r)
 		if(stack[r].name=='mounted_app')
 			stack.splice(r--,1)
-}
+}*/
 
 var startServer = function(next) {
 	App.listen(App.config.port, App.config.url)
 	console.log("Server ready: http://localhost:"+App.config.port+"/")
 	next && next()
-};
-var getSubAppFromRouteName = function(routeName) {
+}
+/*var getSubAppFromRouteName = function(routeName) {
 	var route = App.routes[routeName]
 	var subApp = route.subApp
 	if(subApp==undefined) {
@@ -103,23 +111,10 @@ var getSubAppFromRouteName = function(routeName) {
 		route.subApp = subApp;
 	}
 	return subApp;
-};
-
-// App.require
-var createSubApp = function(callerDepth) {
-	if(!callerDepth) callerDepth = 0
-	var callerFileName = getCallerFileName(callerDepth+1)
-	callerFileName = path.normalize(callerFileName)
-	var subApp = express()
-	subApp.dirname = path.dirname(callerFileName)
-	subApp.dirurl = normalizeToUrl(path.relative(App.dirname, subApp.dirname))
-	subApp.buildPartial = buildPartial
-	subApp.getAsPartial = getAsPartial
-	return subApp
-}
+}*/
 
 // partials
-var buildPartial = function(file, args) {
+/*var buildPartial = function(file, args) {
 	var fileurl = normalizeToUrl(this.dirurl+'/'+file)
 	var webcomponent = path.basename(file, '.html')
 	var head = '<link rel="import" href="'+fileurl+'"></link>'
@@ -145,7 +140,7 @@ var getAsPartial = function(route, file, args) {
 		res.partial = partial
 		next()
 	})
-}
+}*/
 
 /*var getUrl = function(file, callerFileName) {
 	if(!callerFileName) callerFileName = getCallerFileName();
@@ -156,11 +151,11 @@ var normalizeToUrl = function(file) {
 	if(url[0]!='/') url = '/'+url
 	return url
 }
-var getCallerFileName = function(callerDepth) {
+/*var getCallerFileName = function(callerDepth) {
 	if(callerDepth===undefined) callerDepth = 0
 	return callsite()[callerDepth+1].getFileName()
-}
-var solveHtmlExpr = function(htmlExpr) {
+}*/
+var solveHtmlExpr = function(htmlExpr, relativePath) {
 	var type = typeof htmlExpr
 	// case string
 	if(type==="string") return { body:htmlExpr }
@@ -169,12 +164,16 @@ var solveHtmlExpr = function(htmlExpr) {
 		var webcomponent = htmlExpr.webcomponent
 		if(webcomponent!==undefined) {
 			var tagname = path.basename(webcomponent, '.html')
+			if(relativePath) webcomponent = relativePath+"/"+webcomponent
 			var webcomponentUrl = normalizeToUrl(path.relative(App.dirname, webcomponent))
 			return { head:'<link rel="import" href="'+webcomponentUrl+'"></link>', body:"<"+tagname+"></"+tagname+">"}
 		}
-		// other cases
-		return htmlExpr
+		// basic
+		if(htmlExpr.head!==undefined || htmlExpr.body!==undefined) {
+			return htmlExpr
+		}
 	}
+	return null
 }
 
 // installation ///////////////////////////////////////////////////////////////
@@ -183,46 +182,44 @@ var install = function(next) {
 
 	createApp()
 
-	App.installComponent({component:null}, null, next)
+	App.installComponent(null, next)
 }
 
 // installComponent
-var installComponent = function(req, res, next) {
+var installComponent = function(component, next) {
 	if (!sh.which('git')) return next("ERROR: git is not installed.");
 	if (!sh.which('npm')) return next("ERROR: npm is not installed.");
 	if (!sh.which('bower')) return next("ERROR: bower is not installed.");
-	var component = req.component;
 	var pwd = sh.pwd(), dir = App.dirname;
 	sh.cd(dir);
 	var cmd = 'bower install '+(component ? component : "");
 	sh.exec(cmd, function(code){
 		if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
 		sh.cd(pwd);
-		var path = App.dirname+'/bower_components/' + (component ? component : '*') + '/**/msa-config.json';
-		glob(path, null, function(err, msaConfigFiles) {
+		var path = App.dirname+'/bower_components/' + (component ? component : '*') + '/msa-server/package.json';
+		glob(path, null, function(err, packageFiles) {
 			if(err) return console.log("ERROR: "+err);
-			installSubApp(msaConfigFiles, 0, next);
+			installSubApp(packageFiles, 0, packageFiles.length, next);
 		});
 	})
-};
-var installSubApp = function(msaConfigFiles, index, next) {
-	if(index>=msaConfigFiles.length) return next();
-	var file = msaConfigFiles[index], dir = path.dirname(file);
-	// check if package.json exists
-	filExists(dir+'/package.json', function(exists) {
-		// if not exists: pass
-		if(!exists) return installSubApp(msaConfigFiles, index+1, next)
-		// if exists: npm install the subApp module dependencies
-		var pwd = sh.pwd();
-		sh.cd(dir);
-		var cmd = "npm install"
-		sh.exec(cmd, function(code){
-			if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
-			sh.cd(pwd)
-			installSubApp(msaConfigFiles, index+1, next)
-		})
+}
+var installSubApp = function(packageFiles, i, len, next) {
+	if(i>=len) return next();
+	var file = packageFiles[i], dir = path.dirname(file);
+	// npm install the subApp module dependencies
+	var pwd = sh.pwd();
+	sh.cd(dir);
+	var cmd = "npm install"
+	sh.exec(cmd, function(code){
+		if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
+		sh.cd(pwd)
+		installSubApp(packageFiles, i+1, len, next)
 	})
-};
+}
+
+var registerRoute = function(route, subApp) {
+	this.subAppsRouter.use(route, subApp)
+}
 
 // COMMON ////////////////////////////////////////
 
@@ -237,19 +234,29 @@ var createApp = function() {
 	App.dirname = path.normalize(__dirname+"/..")
 	App.installComponent = installComponent
 	App.subApp = createSubApp
-	App.getSubAppFromRouteName = getSubAppFromRouteName
-	App.components = {}
-	App.routes = {}
-	App.setRoutes = setRoutes
+	//App.getSubAppFromRouteName = getSubAppFromRouteName
+	//App.components = {}
+	//App.routes = {}
+	//App.setRoutes = setRoutes
 	App.solveHtmlExpr = solveHtmlExpr
+
+	App.subAppsRouter = express.Router()
+	App.registerRoute = registerRoute
 
 	// load sever config
 	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
 }
 
-var filExists = function(file, next) {
-	if(fs.access) fs.access(file, fs.F_OK, function(err) { next(!err) })
-	else fs.exists(file, next) // to be compatible with old versions of nodejs
+var createSubApp = function(callerDepth) {
+	/*if(!callerDepth) callerDepth = 0
+	var callerFileName = getCallerFileName(callerDepth+1)
+	callerFileName = path.normalize(callerFileName)*/
+	var subApp = express()
+	/*subApp.dirname = path.dirname(callerFileName)
+	subApp.dirurl = normalizeToUrl(path.relative(App.dirname, subApp.dirname))
+	subApp.buildPartial = buildPartial
+	subApp.getAsPartial = getAsPartial*/
+	return subApp
 }
 
 // execute main function
