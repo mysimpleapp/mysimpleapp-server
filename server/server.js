@@ -133,14 +133,14 @@ var startServer = function(next) {
 	}
 	body += '</'+webcomponent+'>'
 	return { head: head, body: body }
-}
-var getAsPartial = function(route, file, args) {
-	var partial = this.buildPartial(file, args)
+}*/
+var getAsPartial = function(route, htmlExpr, basePath) {
+	var partial = App.solveHtmlExpr(htmlExpr, basePath)
 	return this.get(route, function(req, res, next) {
 		res.partial = partial
 		next()
 	})
-}*/
+}
 
 /*var getUrl = function(file, callerFileName) {
 	if(!callerFileName) callerFileName = getCallerFileName();
@@ -155,7 +155,7 @@ var normalizeToUrl = function(file) {
 	if(callerDepth===undefined) callerDepth = 0
 	return callsite()[callerDepth+1].getFileName()
 }*/
-var solveHtmlExpr = function(htmlExpr, relativePath) {
+var solveHtmlExpr = function(htmlExpr, basePath) {
 	var type = typeof htmlExpr
 	// case string
 	if(type==="string") return { body:htmlExpr }
@@ -164,7 +164,7 @@ var solveHtmlExpr = function(htmlExpr, relativePath) {
 		var webcomponent = htmlExpr.webcomponent
 		if(webcomponent!==undefined) {
 			var tagname = path.basename(webcomponent, '.html')
-			if(relativePath) webcomponent = relativePath+"/"+webcomponent
+			if(basePath) webcomponent = basePath+"/"+webcomponent
 			var webcomponentUrl = normalizeToUrl(path.relative(App.dirname, webcomponent))
 			return { head:'<link rel="import" href="'+webcomponentUrl+'"></link>', body:"<"+tagname+"></"+tagname+">"}
 		}
@@ -254,8 +254,8 @@ var createSubApp = function(callerDepth) {
 	var subApp = express()
 	/*subApp.dirname = path.dirname(callerFileName)
 	subApp.dirurl = normalizeToUrl(path.relative(App.dirname, subApp.dirname))
-	subApp.buildPartial = buildPartial
-	subApp.getAsPartial = getAsPartial*/
+	subApp.buildPartial = buildPartial*/
+	subApp.getAsPartial = getAsPartial
 	return subApp
 }
 
