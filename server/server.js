@@ -4,7 +4,10 @@ var express = require('express')
 var fs = require('fs')
 var sh = require('shelljs')
 var glob = require('glob')
-var callsite = require('callsite')
+
+global.Msa = global.MySimpleApp = {}
+Msa.dirname = path.normalize(__dirname+"/..")
+Msa.express = express
 
 var main = function() {
 	// check input arguments
@@ -36,144 +39,128 @@ var start = function(next) {
 	
 	createApp()
 	
-	applyConfigs(startServer)
+	requireMsaComponentIndexScripts(startServer)
 }
 
-var applyConfigs = function(next) {
-	
-	// find all msa-config.json files
-	glob(App.dirname+"/bower_components/*/msa-server/msa-config.json", null, function(err, msaConfigFiles) {
-		for(var f=0, lenF=msaConfigFiles.length; f<lenF; ++f) {
-			var file = msaConfigFiles[f], dir = path.dirname(file)
-			// parse file
-			var config = JSON.parse(fs.readFileSync(file))
-			// loop on config elems
-			var configElems = (config.length===undefined) ? [config] : config
-			for(var e=0, lenE=configElems.length; e<lenE; ++e) {
-				var configElem = configElems[e]
-				// subApp
-				var subApp = null
-				if(configElem.subApp) subApp = require(path.normalize(dir+'/'+configElem.subApp))
-				else {
-					// subApp from html expr
-					var html = solveHtmlExpr(configElem, dir)
-					if(html) {
-						var subApp = createSubApp()
-						subApp.get('/', function(req, res, next) {
-							res.partial = html
-							next()
-						})
-					}
+var requireMsaComponentIndexScripts = function(next) {
 
-				}
-				// route
-				if(subApp && configElem.route) {
-					App.registerRoute(configElem.route, subApp)
-				}
-			}
-		}
-		
-		// use main App
-		var mainApp = require(App.dirname+'/bower_components/'+App.config.mainApp)
-		App.use(mainApp)
-		
-		next && next()
-	});
-}
+	// require msa components index scripts
+	glob(Msa.dirname+"/bower_components/*/msa-server/index.js", null, function(err, indexScripts) {
+		for(var i=0, len=indexScripts.length; i<len; ++i)
+			require(indexScripts[i])
+	})
 
-/*var resetMountedApp = function() {
-	if(!App._router || !App._router.stack) return
-	var stack = App._router.stack
-	for(var r=0; r<stack.length; ++r)
-		if(stack[r].name=='mounted_app')
-			stack.splice(r--,1)
-}*/
+	// use main App
+	var mainApp = require(Msa.dirname+'/bower_components/'+Msa.config.mainApp)
+	Msa.app.use(mainApp)
 
-var startServer = function(next) {
-	App.listen(App.config.port, App.config.url)
-	console.log("Server ready: http://localhost:"+App.config.port+"/")
 	next && next()
 }
-/*var getSubAppFromRouteName = function(routeName) {
-	var route = App.routes[routeName]
-	var subApp = route.subApp
-	if(subApp==undefined) {
-		subApp = null
-		var subAppFile = route.file
-		var ext = path.extname(subAppFile)
-		if(ext==".js") subApp = require(subAppFile)
-		else if(ext==".html") {
-			subApp = App.subApp(subAppFile)
-			subApp.getAsPartial('/', path.basename(subAppFile))
-		} else {
-			console.log("ERROR: Bad extension for routing file (only allowed .js and .html).")
-		}
-		route.subApp = subApp;
-	}
-	return subApp;
-}*/
 
-// partials
-/*var buildPartial = function(file, args) {
-	var fileurl = normalizeToUrl(this.dirurl+'/'+file)
-	var webcomponent = path.basename(file, '.html')
-	var head = '<link rel="import" href="'+fileurl+'"></link>'
-	var body = '<'+webcomponent
-	if(args) {
-		for(var a in args) {
-			if(a==="content") continue
-			var val = args[a]
-			if(val===null) continue
-			body += " "+a+"='"+val+"'"
-		}
-	}
-	body += '>'
-	if(args && args.content) {
-		body += args.content
-	}
-	body += '</'+webcomponent+'>'
-	return { head: head, body: body }
-}*/
+var startServer = function(next) {
+	Msa.app.listen(Msa.config.port, Msa.config.url)
+	console.log("Server ready: http://localhost:"+Msa.config.port+"/")
+	next && next()
+}
+
 var getAsPartial = function(route, htmlExpr, basePath) {
-	var partial = App.solveHtmlExpr(htmlExpr, basePath)
+	var partial = Msa.solveHtmlExpr(htmlExpr, basePath)
 	return this.get(route, function(req, res, next) {
 		res.partial = partial
 		next()
 	})
 }
 
-/*var getUrl = function(file, callerFileName) {
-	if(!callerFileName) callerFileName = getCallerFileName();
-	return '/'+path.normalize(path.relative(App.dirname, path.dirname(callerFileName)+'/'+file));
-};*/
 var normalizeToUrl = function(file) {
 	var url = path.normalize(file).replace(/\\/g, '/')
 	if(url[0]!='/') url = '/'+url
 	return url
 }
-/*var getCallerFileName = function(callerDepth) {
-	if(callerDepth===undefined) callerDepth = 0
-	return callsite()[callerDepth+1].getFileName()
-}*/
-var solveHtmlExpr = function(htmlExpr, basePath) {
+
+var solveHtmlExpr = Msa.solveHtmlExpr = function(htmlExpr) { //, basePath) {
+	var head = [], body = []
+	solveHtmlExprCore(htmlExpr, head, body)
+	var bodyStr = "", headStr = ""
+	for(var i=0, len=body.length; i<len; ++i)
+		bodyStr += body[i]
+	for(var i=0, len=head.length; i<len; ++i) {
+		var found = false
+		for(var j=i-1; !found && j>=0; --j)
+			found = (head[i]===head[j])
+		if(!found) headStr += head[i]
+	}
+	return { head:headStr, body:bodyStr }
+}
+var solveHtmlExprCore = function(htmlExpr, head, body) {
 	var type = typeof htmlExpr
 	// case string
-	if(type==="string") return { body:htmlExpr }
-	if(type==="object") {
-		// case webcomponent
-		var webcomponent = htmlExpr.webcomponent
-		if(webcomponent!==undefined) {
-			var tagname = path.basename(webcomponent, '.html')
-			if(basePath) webcomponent = basePath+"/"+webcomponent
-			var webcomponentUrl = normalizeToUrl(path.relative(App.dirname, webcomponent))
-			return { head:'<link rel="import" href="'+webcomponentUrl+'"></link>', body:"<"+tagname+"></"+tagname+">"}
-		}
-		// basic
-		if(htmlExpr.head!==undefined || htmlExpr.body!==undefined) {
-			return htmlExpr
+	if(type==="string") body.push(htmlExpr)
+	else if(type==="object") {
+		// case array
+		var len = htmlExpr.length
+		if(len!==undefined) {
+			for(var i=0; i<len; ++i)
+				solveHtmlExprCore(htmlExpr[i], head, body)
+		// case object
+		} else {
+			// webcomponent
+			var tag
+			var webcomponent = htmlExpr.webcomponent
+			if(webcomponent!==undefined) {
+				var tagname = path.basename(webcomponent, '.html')
+				var webcomponentUrl = normalizeToUrl(path.relative(Msa.dirname, webcomponent))
+				head.push('<link rel="import" href="'+webcomponentUrl+'"></link>')
+				tag = tagname
+			}
+			// tag (with props & content)
+			tag = htmlExpr.tag || tag
+			if(tag) {
+				var content = htmlExpr.content, props = htmlExpr.props
+				var str = '<'+tag
+				// props
+				if(props)
+					for(var p in props)
+						str += ' '+ p +'="'+ props[p] +'"'
+				str += '>'
+				body.push(str)
+				// content
+				if(content) solveHtmlExprCore(content, head, body)
+				body.push('</'+tag+'>')
+			}
+			// body
+			solveHtmlExprCore(htmlExpr.body, head, body)
+			// head
+			solveHeadExpr(htmlExpr.head, head)
 		}
 	}
-	return null
+}
+var solveHeadExpr = function(headExpr, head) {
+	var type = typeof headExpr
+	// case string
+	if(type==="string") head.push(headExpr)
+	else if(type==="object") {
+		// case array
+		var len = headExpr.length
+		if(len!==undefined) {
+			for(var i=0; i<len; ++i)
+				solveHeadExpr(headExpr[i], head)
+			return
+		}
+	}
+}
+
+var checkHtmlExpr = Msa.checkHtmlExpr = function(match, htmlExpr) {
+	var tag = match.tag
+	if(tag && tag!==htmlExpr.tag) return false
+	var props = match.props
+	if(props) {
+		var htmlProps = htmlExpr.props
+		if(!htmlProps) return false
+		for(var p in props) {
+			if(props[p]!==htmlProps[p]) return false
+		}
+	}
+	return true
 }
 
 // installation ///////////////////////////////////////////////////////////////
@@ -182,21 +169,21 @@ var install = function(next) {
 
 	createApp()
 
-	App.installComponent(null, next)
+	Msa.installComponent(null, next)
 }
 
 // installComponent
-var installComponent = function(component, next) {
+var installComponent = Msa.installComponent = function(component, next) {
 	if (!sh.which('git')) return next("ERROR: git is not installed.");
 	if (!sh.which('npm')) return next("ERROR: npm is not installed.");
 	if (!sh.which('bower')) return next("ERROR: bower is not installed.");
-	var pwd = sh.pwd(), dir = App.dirname;
+	var pwd = sh.pwd(), dir = Msa.dirname;
 	sh.cd(dir);
 	var cmd = 'bower install '+(component ? component : "");
 	sh.exec(cmd, function(code){
 		if(code!==0) return console.log("ERROR: '"+cmd+"' failed (dir: "+dir+").")
 		sh.cd(pwd);
-		var path = App.dirname+'/bower_components/' + (component ? component : '*') + '/msa-server/package.json';
+		var path = Msa.dirname+'/bower_components/' + (component ? component : '*') + '/msa-server/package.json';
 		glob(path, null, function(err, packageFiles) {
 			if(err) return console.log("ERROR: "+err);
 			installSubApp(packageFiles, 0, packageFiles.length, next);
@@ -217,45 +204,27 @@ var installSubApp = function(packageFiles, i, len, next) {
 	})
 }
 
-var registerRoute = function(route, subApp) {
+var registerRoute = Msa.registerRoute = function(route, subApp) {
 	this.subAppsRouter.use(route, subApp)
 }
 
 // COMMON ////////////////////////////////////////
 
 var createApp = function() {
-	if(global.App) return
+	if(Msa.app) return
 
 	// create App
-	global.App = express()
-
-	// Add App attributes & methods
-	App.express = express
-	App.dirname = path.normalize(__dirname+"/..")
-	App.installComponent = installComponent
-	App.subApp = createSubApp
-	//App.getSubAppFromRouteName = getSubAppFromRouteName
-	//App.components = {}
-	//App.routes = {}
-	//App.setRoutes = setRoutes
-	App.solveHtmlExpr = solveHtmlExpr
-
-	App.subAppsRouter = express.Router()
-	App.registerRoute = registerRoute
+	Msa.app = express()
+	Msa.subAppsRouter = express.Router()
 
 	// load sever config
-	App.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
+	Msa.config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'utf8'))
 }
 
-var createSubApp = function(callerDepth) {
-	/*if(!callerDepth) callerDepth = 0
-	var callerFileName = getCallerFileName(callerDepth+1)
-	callerFileName = path.normalize(callerFileName)*/
+var createSubApp = Msa.subApp = function(route) {
 	var subApp = express()
-	/*subApp.dirname = path.dirname(callerFileName)
-	subApp.dirurl = normalizeToUrl(path.relative(App.dirname, subApp.dirname))
-	subApp.buildPartial = buildPartial*/
 	subApp.getAsPartial = getAsPartial
+	if(route) Msa.registerRoute(route, subApp)
 	return subApp
 }
 

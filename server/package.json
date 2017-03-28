@@ -2,8 +2,6 @@
   "name": "mysimpleapp",
   "version": "0.0.1",
   "dependencies": {
-    "body-parser": "^1.14.1",
-    "callsite": "^1.0.0",
     "express": "^4.13.3",
     "fs": "0.0.2",
     "glob": "^5.0.15",
