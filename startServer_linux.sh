@@ -1,31 +1,25 @@
-#!/bin/sh
-cd "$(dirname $0)/server"
+#!/bin/bash
+cd "$(dirname $0)/msa-server"
+
+main() {
+	checkInstalled
+	startServer
+}
+
+checkInstalled() {
+	[ ! -f "installed" ] && exitKO "Server is not installed. Please, use installServer_linux script first."
+}
 
 startServer() {
-	echo "Start MySimpleApp server..."
-	node server.js start
+	echo "Starting MySimpleApp server..."
+	node server.js start || exitKO "MySimpleApp server failed."
 }
 
-installServer() {
-	echo "Install MySimpleApp server..."
-	npm install
-	node server.js install
-}
-
-exitInError() {
+exitKO() {
+	(>&2 echo "ERROR: $1")
 	echo "Press any key to continue..."
 	read _
 	exit 1
 }
 
-# Start server
-startServer
-if [ "$?" -ne 0 ]; then
-	# If server failed to start, try an installation
-	echo "MySimpleApp failed ! Perhaps it is not installed."
-	installServer
-	[ "$?" -ne 0 ] && echo "Installation of MySimpleApp server failed !" && exitInError
-	# Then restart server
-	startServer
-	[ "$?" -ne 0 ] && echo "MySimpleApp server failed to start !" && exitInError
-fi
+main
