@@ -6,7 +6,7 @@
 		"cert": null
 	},
 	"secret": "mySecret",
-	"db_type": "tingodb",
+	"db_type": "nedb",
 	"main_app": "msa-main/msa-server/index.js",
 	"log_level": "DEBUG"
 }
