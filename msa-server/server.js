@@ -137,9 +137,28 @@ var requireMsaComponentIndexScripts = function(next) {
 }
 
 var startServer = function(next) {
-	Msa.app.listen(Msa.params.port, Msa.params.url)
-	console.log("Server ready: http://localhost:"+Msa.params.port+"/")
-//	next && next()
+	var httpsParams = Msa.params.https, isHttps = httpsParams.activated
+	// create server
+	if(isHttps) {
+		var https = require('https')
+		var cred = {
+			key: fs.readFileSync(httpsParams.key),
+			cert: fs.readFileSync(httpsParams.cert)
+		}
+		var server = https.createServer(cred, Msa.app)
+	} else {
+		var http = require('http')
+		var server = http.createServer(Msa.app)
+	}
+	// determine port
+	var port = Msa.params.port
+	if(port=="dev") port = isHttps ? 8443 : 8080
+	if(port=="prd") port = isHttps ? 81 : 80
+	// start server
+	server.listen(port)
+	// log
+	var prot = isHttps ? "https" : "http"
+	console.log("Server ready: "+prot+"://localhost:"+port+"/")
 }
 
 

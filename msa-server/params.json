@@ -1,6 +1,10 @@
 {
-	"port": 8080,
-	"url": null,
+	"port": "dev",
+	"https": {
+		"activated": false,
+		"key": null,
+		"cert": null
+	},
 	"secret": "mySecret",
 	"db_type": "tingodb",
 	"main_app": "msa-main/msa-server/index.js",
